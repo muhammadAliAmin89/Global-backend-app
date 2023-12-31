@@ -1,5 +1,6 @@
 const sendResponse = require("../helper/helper");
 const projectsModel = require("../models/projectsModel")
+const Team = require("../models/teamModel")
 
 const projectsController = {
     get: async (req, res) => {
@@ -59,7 +60,41 @@ const projectsController = {
                 data: err
             })
         }
+    },
+    assignProject: async (req, res) => {
+        try {
+            const { title, description, dueDate, team, } = req.body;
+            const checkTeam = await Team.findById(team);
+            if (!checkTeam) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Team not found',
+                });
+            }
+            const newTask = await projectsModel.create({
+                title,
+                description,
+                dueDate,
+                team,
+            });
 
+            // Update team ke tasks array mein newTask ko push karein
+            await Team.findByIdAndUpdate(team, { $push: { projects: newTask } });
+
+            // Update user ke tasks array mein newTask ko push karein
+            return res.status(201).json({
+                success: true,
+                message: 'Task successfully assign kiya gaya hai',
+                task: newTask,
+            });
+        } catch (error) {
+            console.log(error)
+            res.status(500).json({
+                success: false,
+                message: 'Task assign karne mein kuch problem aayi hai',
+                error: error.message,
+            });
+        }
     },
     markAsDone: async (req, res) => {
         try {
@@ -79,29 +114,31 @@ const projectsController = {
     },
     edit: async (req, res) => {
         try {
-            const id = req.params.id
-            const { title, description, dueDate, } = req.body
-            const obj = { title, description, dueDate }
-            const errArr = []
+            const id = req.params.id;
+            const { title, description, dueDate } = req.body;
+            const obj = { title, description, dueDate };
+            const errArr = [];
             if (!obj.title) {
-                errArr.push('Required title')
+                errArr.push('Required title');
             }
             if (!obj.description) {
-                errArr.push('Required description')
+                errArr.push('Required description');
             }
             if (!obj.dueDate) {
-                errArr.push('Required due date')
+                errArr.push('Required due date');
             }
             if (errArr.length > 0) {
-                res.status(401).send(sendResponse(false, 'all Crediantials Not Found ', errArr))
+                res
+                    .status(401)
+                    .send(SendResponse(false, 'all Crediantials Not Found ', errArr));
+            } else {
+                const result = await projectsModel.findByIdAndUpdate(id, obj);
+                res
+                    .status(200)
+                    .send(SendResponse(true, 'Updated Successfully', result));
             }
-            else {
-                const result = await projectsModel.findByIdAndUpdate(id, obj)
-                res.status(200).send(sendResponse(true, "Updated Successfully", result))
-            }
-        }
-        catch (error) {
-            res.status(404).send(sendResponse(false, error, null))
+        } catch (error) {
+            res.status(404).send(SendResponse(false, error, null));
         }
     },
     del: async (req, res) => {

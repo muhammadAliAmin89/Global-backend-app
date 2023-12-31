@@ -30,6 +30,12 @@ const userSchema = mongoose.Schema({
         enum: ['TeamMember', 'User'],
         default: 'User'
     },
+    verified: {
+        type: Boolean,
+        default: false
+    },
+    verificationToken: String, // Add this field
+
 },
     {
         timestamps: true

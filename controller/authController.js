@@ -1,13 +1,17 @@
 const sendResponse = require("../helper/helper")
 const userModel = require("../models/authModel")
 const bcrypt = require("bcryptjs")
-const jwt = require('jsonwebtoken')
-const authController = {
+const crypto = require("crypto")
+const info = require("../utils/sendMail")
+require("dotenv").config()
 
+
+const authController = {
     signup: async (req, res) => {
         try {
-            let { firstName, lastName, email, password, contact, dateOfBirth, gender } = req.body
-            let obj = { firstName, lastName, email, password, contact, dateOfBirth, gender }
+            let { firstName, lastName, email, password, contact, dateOfBirth, gender, token } = req.body
+            let obj = { firstName, lastName, email, password, contact, dateOfBirth, gender, token }
+
             let errorArray = []
             if (!obj.firstName) {
                 errorArray.push("First name is required")
@@ -42,20 +46,38 @@ const authController = {
                     .send(sendResponse(false, "User is already exist with this email", null))
                 return
             }
+            const verificationToken = crypto.randomBytes(5).toString('hex');
             obj.password = await bcrypt.hash(obj.password, 10)
-            let user = await new userModel(obj);
-            let result = await user.save();
-            if (result) {
-                res
-                    .status(200)
-                    .send(sendResponse(true, "User created successfully!", result))
-                return
-            }
+            let user = await new userModel({ ...obj, verificationToken: verificationToken });
+            await user.save()
+            info("Please verify your email", "Email verification", user.email, `
+            <div>
+                <p>${verificationToken}</p>                
+            </div>`);
+
+            res.send(sendResponse(true, "Email sent! Check your email for verification", user));
+
         } catch (error) {
+            console.log(error);
             res.status(500).send(sendResponse(false, "Internal server error found !", error))
         }
     },
-    login: async (req, res) => {
+    verifyEmail: async (req, res) => {
+        try {
+            const { verificationToken } = req.body;
+            const user = await userModel.findOne({ verificationToken: verificationToken });
+            if (!user) {
+                return res.status(401).send(sendResponse(false, "Invalid verification token.", null));
+            }
+            user.verified = true;
+            await user.save();
+            res.send(sendResponse(true, "Email successfully verified!", user));
+        } catch (error) {
+            console.log(error);
+            res.status(500).send(sendResponse(false, "Internal server error found!", error));
+        }
+    },
+    login: async (req, res) => { 
         try {
             let { email, password } = req.body
             let obj = { email, password }
@@ -111,6 +133,8 @@ const authController = {
             return res.status(500).json({ message: 'Internal server error' });
         }
     },
+
+
 }
 
 module.exports = authController

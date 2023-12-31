@@ -3,7 +3,6 @@ const userModel = require('../models/authModel');
 const Team = require('../models/teamModel');
 const sendResponse = require("../helper/helper");
 
-
 const TeamController = {
     createTeam: async (req, res) => {
         try {
@@ -38,7 +37,7 @@ const TeamController = {
     getTeamMembers: async (req, res) => {
         try {
             const { teamId } = req.params;
-            const team = await Team.findById(teamId);
+            const team = await Team.findById(teamId).populate("members  messages.sender")
 
             if (!team) {
                 return res.status(404).json({
@@ -46,12 +45,33 @@ const TeamController = {
                     message: 'Team not found',
                 });
             }
+            const members = team.members.map(member => ({
+                _id: member._id,
+                firstName: member.firstName,
+                lastName: member.lastName,
+                // Add other member properties as needed
+            }));
 
+            const messages = team.messages.map(message => ({
+                content: message.content,
+                createdAt: message.createdAt,
+                sender: {
+                    _id: message.sender._id,
+                    firstName: message.sender.firstName,
+                    lastName: message.sender.lastName
+                    // Add other sender properties as needed
+                },
+            }));
             const memberDetails = await userModel.find({ _id: { $in: team.members } });
 
             res.status(200).json({
                 success: true,
-                members: memberDetails,
+                team: {
+                    name: team.name,
+                    members,
+                    tasks: team.tasks, // Include other team properties as needed
+                    messages,
+                },
             });
         } catch (error) {
             res.status(500).json({
@@ -67,7 +87,13 @@ const TeamController = {
             const teams = await Team.find().populate({
                 path: 'members',
                 select: 'firstName lastName email dateOfBirth gender contact userStatus createdAt updatedAt' // Include the fields you need
-            });
+            }).populate({
+                path: 'projects',
+                select: 'title description dueDate projectStatus updatedAt createdAt _id',
+            }).populate({
+                path: 'messages.sender',
+                select: 'firstName lastName email dateOfBirth gender contact userStatus createdAt updatedAt',
+            })
 
             res.status(200).json({
                 success: true,
@@ -81,8 +107,53 @@ const TeamController = {
                 error: error.message,
             });
         }
-    }
+    },
+    sendMessage: async (req, res) => {
+        try {
+            const { team, senderId, content } = req.body;
+            const obj = { team, senderId, content };
+
+            // Validate input
+            if (!obj.team || !obj.senderId || !obj.content) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Validation error: Please provide team, senderId, and content.',
+                });
+            }
+
+            const findTeam = await Team.findById(obj.team);
+            if (!findTeam) {
+                return res.status(404).json(sendResponse(
+                    false, "Team not found", null
+                ));
+            }
+
+            const message = {
+                sender: senderId,
+                content: content,
+                createdAt: new Date(),
+            };
+
+            // Use $addToSet to avoid duplicate messages
+            await Team.updateOne({ _id: obj.team }, { $addToSet: { messages: message } });
+
+            res.status(200).json({
+                success: true,
+                message: "Message sent successfully",
+                team: findTeam,
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({
+                success: false,
+                message: 'Error sending message',
+                error: error.message,
+            });
+        }
+    },
+
+
 
 }
 
-module.exports = TeamController;
+module.exports = { TeamController };

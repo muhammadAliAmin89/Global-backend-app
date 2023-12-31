@@ -4,12 +4,14 @@ const App = express()
 App.use(express.json())
 require('dotenv').config();
 const teamRoute = require("./router/teamRoute")
-// Work
 const authRoute = require("./router/authRouter")
-const projectsRoute = require("./router/projectRoute")
+const projectsRoute = require("./router/projectRoute");
+const info = require('./utils/sendMail');
 App.use("/auth", authRoute)
 App.use("/projects", projectsRoute)
 App.use("/teams", teamRoute)
+
+
 
 App.get("/", (req, res) => {
     res.send("Server Started");
@@ -26,5 +28,5 @@ mongoose
         });
     })
     .catch((err) => {
-        console.log("err", err.error);
+        console.log("err", err);
     });
